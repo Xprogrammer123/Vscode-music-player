@@ -1,0 +1,81 @@
+{
+  "name": "vscode-music-player",
+  "displayName": "Music Player",
+  "description": "Spotify music player with visualizer built into VS Code",
+  "version": "1.0.0",
+  "publisher": "your-publisher-name",
+  "engines": { "vscode": "^1.85.0" },
+  "categories": ["Other"],
+  "activationEvents": ["onStartupFinished"],
+  "main": "./out/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "panel": [
+        {
+          "id": "musicPlayerPanel",
+          "title": "Music Player",
+          "icon": "media/music-player.svg"
+        }
+      ]
+    },
+    "views": {
+      "musicPlayerPanel": [
+        {
+          "id": "musicPlayer.visualizer",
+          "name": "Visualizer",
+          "type": "webview"
+        }
+      ]
+    },
+    "commands": [
+      { "command": "musicPlayer.connect",    "title": "Music Player: Connect Spotify" },
+      { "command": "musicPlayer.disconnect", "title": "Music Player: Disconnect Spotify" },
+      { "command": "musicPlayer.search",     "title": "Music Player: Search Songs" },
+      { "command": "musicPlayer.play",       "title": "Music Player: Play / Pause" },
+      { "command": "musicPlayer.next",       "title": "Music Player: Next Track" },
+      { "command": "musicPlayer.prev",       "title": "Music Player: Previous Track" },
+      { "command": "musicPlayer.showPanel",  "title": "Music Player: Show Visualizer" }
+    ],
+    "keybindings": [
+      { "command": "musicPlayer.play",   "key": "ctrl+shift+space", "mac": "cmd+shift+space" },
+      { "command": "musicPlayer.next",   "key": "ctrl+shift+]",     "mac": "cmd+shift+]" },
+      { "command": "musicPlayer.prev",   "key": "ctrl+shift+[",     "mac": "cmd+shift+[" },
+      { "command": "musicPlayer.search", "key": "ctrl+shift+m",     "mac": "cmd+shift+m" }
+    ],
+    "configuration": {
+      "title": "Music Player",
+      "properties": {
+        "musicPlayer.clientId": {
+          "type": "string",
+          "default": "",
+          "description": "Your Spotify App Client ID (get from developer.spotify.com)"
+        },
+        "musicPlayer.visualizerBars": {
+          "type": "number",
+          "default": 80,
+          "minimum": 24,
+          "maximum": 120,
+          "description": "Number of bars in the visualizer"
+        },
+        "musicPlayer.visualizerColor": {
+          "type": "string",
+          "default": "#ffffff",
+          "description": "Visualizer bar color (hex)"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch":   "tsc -watch -p ./",
+    "package": "vsce package"
+  },
+  "dependencies": {
+    "axios": "^1.6.0"
+  },
+  "devDependencies": {
+    "@types/node":   "^20.0.0",
+    "@types/vscode": "^1.85.0",
+    "typescript":    "^5.3.0"
+  }
+}
