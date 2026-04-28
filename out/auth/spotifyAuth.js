@@ -50,6 +50,7 @@ const REDIRECT_PORT = 8765;
 const REDIRECT_URI = `http://localhost:${REDIRECT_PORT}/callback`;
 const AUTH_URL = 'https://accounts.spotify.com/authorize';
 const TOKEN_URL = 'https://accounts.spotify.com/api/token';
+const DEFAULT_CLIENT_ID = 'b798b69f16ab4864946c78eb0458b94d';
 class SpotifyAuth {
     constructor(context) {
         this.context = context;
@@ -62,7 +63,7 @@ class SpotifyAuth {
         return Buffer.from(hash).toString('base64url');
     }
     async login() {
-        const clientId = vscode.workspace.getConfiguration('musicPlayer').get('clientId', '');
+        const clientId = vscode.workspace.getConfiguration('musicPlayer').get('clientId', DEFAULT_CLIENT_ID);
         if (!clientId) {
             const entered = await vscode.window.showInputBox({
                 prompt: 'Enter your Spotify Client ID (from developer.spotify.com)',
@@ -72,7 +73,7 @@ class SpotifyAuth {
                 return false;
             await vscode.workspace.getConfiguration('musicPlayer').update('clientId', entered, true);
         }
-        const id = vscode.workspace.getConfiguration('musicPlayer').get('clientId', '');
+        const id = vscode.workspace.getConfiguration('musicPlayer').get('clientId', DEFAULT_CLIENT_ID);
         const verifier = this.generateVerifier();
         const challenge = await this.generateChallenge(verifier);
         await this.context.secrets.store('spotify_verifier', verifier);
@@ -162,7 +163,7 @@ class SpotifyAuth {
     }
     async refreshToken(refreshToken) {
         try {
-            const clientId = vscode.workspace.getConfiguration('musicPlayer').get('clientId', '');
+            const clientId = vscode.workspace.getConfiguration('musicPlayer').get('clientId', DEFAULT_CLIENT_ID);
             const body = new URLSearchParams({
                 grant_type: 'refresh_token',
                 refresh_token: refreshToken,

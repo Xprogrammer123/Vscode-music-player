@@ -90,8 +90,8 @@
       "properties": {
         "musicPlayer.clientId": {
           "type": "string",
-          "default": "",
-          "description": "Your Spotify App Client ID (get from developer.spotify.com)"
+          "default": "b798b69f16ab4864946c78eb0458b94d",
+          "description": "Spotify App Client ID used for OAuth"
         },
         "musicPlayer.visualizerBars": {
           "type": "number",
