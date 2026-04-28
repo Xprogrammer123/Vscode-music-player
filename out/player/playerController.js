@@ -41,6 +41,11 @@ class PlayerController {
     constructor(api, visualizer, statusBar) {
         this.lastState = null;
         this.barPhase = 0;
+        this.lastProgressMs = 0;
+        this.progressClockAt = Date.now();
+        this.trackTempo = 120;
+        this.trackSections = [];
+        this.currentTrackId = '';
         this.api = api;
         this.visualizer = visualizer;
         this.statusBar = statusBar;
@@ -61,18 +66,35 @@ class PlayerController {
     }
     // ── Polling ────────────────────────────────────────────────────────────────
     async poll() {
-        const state = await this.api.getPlaybackState();
-        this.lastState = state;
-        this.visualizer.update({
-            isPlaying: state?.isPlaying ?? false,
-            track: state?.track ?? null,
-            progressMs: state?.progressMs ?? 0,
-            volume: state?.volume ?? 100,
-        });
-        this.statusBar.showConnected({
-            isPlaying: state?.isPlaying ?? false,
-            track: state?.track ?? null,
-        });
+        try {
+            const state = await this.api.getPlaybackState();
+            this.lastState = state;
+            this.lastProgressMs = state?.progressMs ?? 0;
+            this.progressClockAt = Date.now();
+            const trackId = state?.track?.id ?? '';
+            if (trackId && trackId !== this.currentTrackId) {
+                this.currentTrackId = trackId;
+                const analysis = await this.api.getTrackAnalysis(trackId);
+                this.trackTempo = analysis?.tempo && Number.isFinite(analysis.tempo) ? analysis.tempo : 120;
+                this.trackSections = analysis?.sections ?? [];
+            }
+            this.visualizer.update({
+                isPlaying: state?.isPlaying ?? false,
+                track: state?.track ?? null,
+                progressMs: state?.progressMs ?? 0,
+                volume: state?.volume ?? 100,
+                deviceName: state?.deviceName ?? '',
+                deviceType: state?.deviceType ?? '',
+            });
+            this.statusBar.showConnected({
+                isPlaying: state?.isPlaying ?? false,
+                track: state?.track ?? null,
+            });
+        }
+        catch (error) {
+            const msg = error instanceof Error ? error.message : 'Could not fetch Spotify playback state.';
+            vscode.window.showWarningMessage(msg);
+        }
     }
     // ── Bar animation ─────────────────────────────────────────────────────────
     // Generates a convincing fake spectrum while real Web Audio isn't available.
@@ -84,24 +106,33 @@ class PlayerController {
         const barCount = vscode.workspace
             .getConfiguration('musicPlayer')
             .get('visualizerBars', 20);
-        this.barPhase += 0.08;
+        this.barPhase += 0.11;
         const p = this.barPhase;
+        const now = Date.now();
+        const estimatedProgress = this.lastProgressMs + (now - this.progressClockAt);
+        const section = this.trackSections.find(s => estimatedProgress >= s.startMs && estimatedProgress < (s.startMs + s.durationMs));
+        const loudness = section ? this.normalizeLoudness(section.loudness) : 0.58;
+        const beatHz = Math.max(0.8, Math.min(3.4, this.trackTempo / 60));
+        const beatPulse = 0.5 + 0.5 * Math.sin((estimatedProgress / 1000) * beatHz * Math.PI * 2);
         const bars = Array.from({ length: barCount }, (_, i) => {
             const norm = i / barCount;
-            // Simulate a bell-shaped frequency response with organic movement
-            const base = 80 * Math.exp(-5 * Math.pow(norm - 0.15, 2)) +
-                60 * Math.exp(-6 * Math.pow(norm - 0.45, 2)) +
-                40 * Math.exp(-8 * Math.pow(norm - 0.75, 2));
-            const wave = Math.sin(p * 1.3 + i * 0.5) * 20 +
-                Math.sin(p * 2.1 + i * 0.9) * 12 +
-                Math.sin(p * 0.7 + i * 1.4) * 8;
-            return Math.max(2, Math.min(98, base + wave));
+            const lane = Math.sin((estimatedProgress / 540) + i * 0.42) * 0.5 + 0.5;
+            const base = 14 + (38 * loudness) + (34 * beatPulse * lane);
+            const wave = Math.sin(p * 1.35 + i * 0.35) * (10 + 10 * loudness) +
+                Math.sin(p * 2.5 + i * 0.8) * (7 + 9 * beatPulse) +
+                Math.sin(p * 0.6 + i * 1.5) * 5;
+            const edgeBoost = 0.78 + 0.22 * Math.sin((norm * Math.PI * 2) + p * 0.3);
+            return Math.max(2, Math.min(98, (base + wave) * edgeBoost));
         });
         this.visualizer.pushBars(bars);
     }
+    normalizeLoudness(loudness) {
+        const clamped = Math.max(-42, Math.min(0, loudness));
+        return (clamped + 42) / 42;
+    }
     // ── Playback commands ──────────────────────────────────────────────────────
-    async play() { await this.api.play(); await this.poll(); }
-    async pause() { await this.api.pause(); await this.poll(); }
+    async play() { await this.runAction(() => this.api.play(), true); }
+    async pause() { await this.runAction(() => this.api.pause(), true); }
     async togglePlay() {
         if (this.lastState?.isPlaying) {
             await this.pause();
@@ -110,49 +141,59 @@ class PlayerController {
             await this.play();
         }
     }
-    async next() { await this.api.next(); await this.poll(); }
-    async prev() { await this.api.prev(); await this.poll(); }
-    async setVolume(pct) { await this.api.setVolume(pct); }
+    async next() { await this.runAction(() => this.api.next(), true); }
+    async prev() { await this.runAction(() => this.api.prev(), true); }
+    async setVolume(pct) { await this.runAction(() => this.api.setVolume(pct), false); }
     async seek(pct) {
         if (!this.lastState?.track)
             return;
         const ms = pct * this.lastState.track.durationMs;
-        await this.api.seek(ms);
-        await this.poll();
+        await this.runAction(() => this.api.seek(ms), true);
     }
     // ── Webview message handler ────────────────────────────────────────────────
     async handleWebviewCommand(cmd, data) {
-        switch (cmd) {
-            case 'play':
-                await this.play();
-                break;
-            case 'pause':
-                await this.pause();
-                break;
-            case 'next':
-                await this.next();
-                break;
-            case 'prev':
-                await this.prev();
-                break;
-            case 'shuffle':
-                await this.api.setShuffle(!(this.lastState?.shuffleOn));
-                break;
-            case 'seek':
-                await this.seek(data?.pct ?? 0);
-                break;
-            case 'volume':
-                await this.setVolume(data?.pct ?? 50);
-                break;
-            case 'playUri':
-                await this.api.play(data?.uri);
-                await this.poll();
-                break;
-            case 'search': {
-                const results = await this.api.search(data?.query ?? '');
-                this.visualizer.postMessage({ type: 'searchResults', results });
-                break;
+        try {
+            switch (cmd) {
+                case 'play':
+                    await this.play();
+                    break;
+                case 'pause':
+                    await this.pause();
+                    break;
+                case 'next':
+                    await this.next();
+                    break;
+                case 'prev':
+                    await this.prev();
+                    break;
+                case 'shuffle':
+                    await this.runAction(() => this.api.setShuffle(!(this.lastState?.shuffleOn)), false);
+                    break;
+                case 'seek':
+                    await this.seek(data?.pct ?? 0);
+                    break;
+                case 'volume':
+                    await this.setVolume(data?.pct ?? 50);
+                    break;
+                case 'playUri':
+                    await this.runAction(() => this.api.play(data?.uri), true);
+                    break;
+                case 'search': {
+                    const results = await this.api.search(data?.query ?? '');
+                    this.visualizer.postMessage({ type: 'searchResults', results });
+                    break;
+                }
             }
+        }
+        catch (error) {
+            const msg = error instanceof Error ? error.message : 'Spotify action failed.';
+            vscode.window.showWarningMessage(msg);
+        }
+    }
+    async runAction(action, repoll) {
+        await action();
+        if (repoll) {
+            await this.poll();
         }
     }
 }

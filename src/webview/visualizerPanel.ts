@@ -57,6 +57,8 @@ export class VisualizerPanel implements vscode.WebviewViewProvider {
     track: Track | null;
     progressMs: number;
     volume: number;
+    deviceName?: string;
+    deviceType?: string;
   }): void {
     void this.postMessage({ type: 'state', ...payload });
   }
@@ -183,6 +185,14 @@ export class VisualizerPanel implements vscode.WebviewViewProvider {
     text-overflow: ellipsis;
   }
 
+  #device-name {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.8);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
   #header-actions {
     display: flex;
     align-items: center;
@@ -207,6 +217,10 @@ export class VisualizerPanel implements vscode.WebviewViewProvider {
     font-size: 10px;
   }
 
+  body.compact #device-name {
+    font-size: 9px;
+  }
+
   body.compact #header-actions button {
     font-size: 10px;
     padding: 4px 8px;
@@ -217,15 +231,17 @@ export class VisualizerPanel implements vscode.WebviewViewProvider {
     flex: 1;
     display: flex;
     align-items: flex-end;
-    justify-content: center;
-    gap: 2px;
+    justify-content: flex-start;
+    gap: 1px;
     min-height: 0;
     padding: 8px 0 4px;
     overflow: hidden;
+    width: 100%;
   }
 
   .bar {
-    width: clamp(3px, 0.62vw, 8px);
+    flex: 1 1 auto;
+    min-width: 1px;
     background: var(--bar-color);
     border-radius: 999px;
     transition: height 48ms linear, opacity 120ms ease;
@@ -240,7 +256,7 @@ export class VisualizerPanel implements vscode.WebviewViewProvider {
   }
 
   body.compact .bar {
-    width: clamp(2px, 0.54vw, 5px);
+    min-width: 1px;
   }
 
   /* ── Controls row ── */
@@ -393,6 +409,7 @@ export class VisualizerPanel implements vscode.WebviewViewProvider {
       <div id="eyebrow">Music Player</div>
       <div id="track-name">~/ not connected</div>
       <div id="artist-name">Connect Spotify to start playback</div>
+      <div id="device-name">Output: waiting for active device</div>
     </div>
     <div id="header-actions">
       <button id="btn-search" title="Search songs (Ctrl+Shift+M)">Search</button>
@@ -433,6 +450,7 @@ export class VisualizerPanel implements vscode.WebviewViewProvider {
   const searchInput = document.getElementById('search-input');
   const trackName = document.getElementById('track-name');
   const artistName = document.getElementById('artist-name');
+  const deviceName = document.getElementById('device-name');
 
   // ── Build visualizer bars ────────────────────────────────────────────────
   const visWrap = document.getElementById('vis-wrap');
@@ -554,6 +572,9 @@ export class VisualizerPanel implements vscode.WebviewViewProvider {
         artistName.textContent = 'Start playback on an active Spotify device';
       }
 
+      const label = msg.deviceName ? ('Output: ' + msg.deviceName + (msg.deviceType ? ' (' + msg.deviceType + ')' : '')) : 'Output: no active device';
+      deviceName.textContent = label;
+
       if (msg.volume !== undefined) {
         document.getElementById('vol-fill').style.width = msg.volume + '%';
         document.getElementById('vol-label').textContent = msg.volume + '%';
@@ -575,6 +596,7 @@ export class VisualizerPanel implements vscode.WebviewViewProvider {
     if (msg.type === 'connected') {
       trackName.textContent = '~/ connected';
       artistName.textContent = 'Nothing playing yet';
+      deviceName.textContent = 'Output: waiting for active device';
     }
 
     if (msg.type === 'openSearch') {

@@ -13,7 +13,7 @@ const SCOPES = [
 ].join(' ');
 
 const REDIRECT_PORT = 8765;
-const REDIRECT_URI = `http://localhost:${REDIRECT_PORT}/callback`;
+const REDIRECT_URI = `http://127.0.0.1:${REDIRECT_PORT}/callback`;
 const AUTH_URL: string = 'https://accounts.spotify.com/authorize';
 const TOKEN_URL: string = 'https://accounts.spotify.com/api/token';
 const DEFAULT_CLIENT_ID = 'b798b69f16ab4864946c78eb0458b94d';

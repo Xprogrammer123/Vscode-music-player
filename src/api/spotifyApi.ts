@@ -17,8 +17,27 @@ export interface PlaybackState {
   track:       Track | null;
   progressMs:  number;
   volume:      number;
+  deviceName:  string;
+  deviceType:  string;
   shuffleOn:   boolean;
   repeatMode:  string;
+}
+
+interface SpotifyDevice {
+  id: string;
+  name: string;
+  type: string;
+  is_active: boolean;
+  is_restricted: boolean;
+}
+
+interface TrackAnalysis {
+  tempo: number;
+  sections: Array<{
+    startMs: number;
+    durationMs: number;
+    loudness: number;
+  }>;
 }
 
 export class SpotifyApi {
@@ -32,6 +51,8 @@ export class SpotifyApi {
       isPlaying:  data.is_playing,
       progressMs: data.progress_ms,
       volume:     data.device?.volume_percent ?? 100,
+      deviceName: data.device?.name ?? 'Unknown device',
+      deviceType: data.device?.type ?? 'Unknown',
       shuffleOn:  data.shuffle_state,
       repeatMode: data.repeat_state,
       track:      this.mapTrack(data.item),
@@ -39,8 +60,10 @@ export class SpotifyApi {
   }
 
   async play(uri?: string): Promise<void> {
+    const deviceId = await this.ensurePlayableDevice();
     const body = uri ? JSON.stringify({ uris: [uri] }) : undefined;
-    await this.put('/me/player/play', body);
+    const suffix = deviceId ? `?device_id=${encodeURIComponent(deviceId)}` : '';
+    await this.put(`/me/player/play${suffix}`, body);
   }
 
   async pause(): Promise<void> {
@@ -74,6 +97,26 @@ export class SpotifyApi {
     return data.tracks.items.map((item: any) => this.mapTrack(item));
   }
 
+  async getTrackAnalysis(trackId: string): Promise<TrackAnalysis | null> {
+    if (!trackId) return null;
+
+    const data = await this.get(`/audio-analysis/${encodeURIComponent(trackId)}`);
+    if (!data) return null;
+
+    const sections = Array.isArray(data.sections)
+      ? data.sections.slice(0, 256).map((s: any) => ({
+          startMs: Math.max(0, Number(s.start ?? 0) * 1000),
+          durationMs: Math.max(250, Number(s.duration ?? 0) * 1000),
+          loudness: Number.isFinite(Number(s.loudness ?? -20)) ? Number(s.loudness ?? -20) : -20,
+        }))
+      : [];
+
+    return {
+      tempo: Number(data.track?.tempo ?? 120),
+      sections,
+    };
+  }
+
   async addToQueue(uri: string): Promise<void> {
     await this.post(`/me/player/queue?uri=${encodeURIComponent(uri)}`);
   }
@@ -104,30 +147,74 @@ export class SpotifyApi {
 
   private async headers(): Promise<Record<string, string>> {
     const token = await this.auth.getAccessToken();
+    if (!token) {
+      throw new Error('Spotify token missing. Reconnect your account.');
+    }
     return {
       Authorization:  `Bearer ${token}`,
       'Content-Type': 'application/json',
     };
   }
 
+  private async ensurePlayableDevice(): Promise<string | null> {
+    const devicesPayload = await this.get('/me/player/devices');
+    const devices: SpotifyDevice[] = Array.isArray(devicesPayload?.devices) ? devicesPayload.devices : [];
+    const unrestricted = devices.filter(d => !d.is_restricted);
+    const activeComputer = unrestricted.find(d => d.is_active && d.type === 'Computer');
+    if (activeComputer?.id) return activeComputer.id;
+
+    const anyComputer = unrestricted.find(d => d.type === 'Computer');
+    if (anyComputer?.id) {
+      await this.put('/me/player', JSON.stringify({ device_ids: [anyComputer.id], play: false }));
+      return anyComputer.id;
+    }
+
+    const active = unrestricted.find(d => d.is_active);
+    if (active?.id) return active.id;
+
+    const fallback = unrestricted[0];
+    if (!fallback?.id) {
+      throw new Error('No Spotify device available. Open Spotify desktop or Web Player on this laptop first.');
+    }
+
+    await this.put('/me/player', JSON.stringify({ device_ids: [fallback.id], play: false }));
+    return fallback.id;
+  }
+
   private async get(path: string): Promise<any> {
-    try {
-      const res = await fetch(`${BASE}${path}`, { headers: await this.headers() });
-      if (res.status === 204 || res.status === 202) return null;
-      if (!res.ok) return null;
-      return res.json();
-    } catch { return null; }
+    const res = await fetch(`${BASE}${path}`, { headers: await this.headers() });
+    if (res.status === 204 || res.status === 202) return null;
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(this.extractError(text, res.status));
+    }
+    return res.json();
   }
 
   private async put(path: string, body?: string): Promise<void> {
-    try {
-      await fetch(`${BASE}${path}`, { method: 'PUT', headers: await this.headers(), body });
-    } catch {}
+    const res = await fetch(`${BASE}${path}`, { method: 'PUT', headers: await this.headers(), body });
+    if (res.status === 204 || res.status === 202) return;
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(this.extractError(text, res.status));
+    }
   }
 
   private async post(path: string, body?: string): Promise<void> {
+    const res = await fetch(`${BASE}${path}`, { method: 'POST', headers: await this.headers(), body });
+    if (res.status === 204 || res.status === 202) return;
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(this.extractError(text, res.status));
+    }
+  }
+
+  private extractError(responseText: string, status: number): string {
     try {
-      await fetch(`${BASE}${path}`, { method: 'POST', headers: await this.headers(), body });
+      const parsed = JSON.parse(responseText);
+      const msg = parsed?.error?.message || parsed?.error_description;
+      if (msg) return `${msg} (HTTP ${status})`;
     } catch {}
+    return `Spotify API request failed (HTTP ${status}).`;
   }
 }
