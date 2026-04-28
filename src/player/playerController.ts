@@ -3,27 +3,27 @@ import { SpotifyApi, PlaybackState } from '../api/spotifyApi';
 import { VisualizerPanel } from '../webview/visualizerPanel';
 import { StatusBarController } from './statusBarController';
 
-const POLL_INTERVAL_MS   = 3_000;   // poll Spotify every 3 s
-const BAR_ANIMATE_MS     = 80;      // visualizer frame rate
+const POLL_INTERVAL_MS = 3_000;   // poll Spotify every 3 s
+const BAR_ANIMATE_MS = 80;      // visualizer frame rate
 
 export class PlayerController {
-  private api:        SpotifyApi;
+  private api: SpotifyApi;
   private visualizer: VisualizerPanel;
-  private statusBar:  StatusBarController;
+  private statusBar: StatusBarController;
 
-  private pollTimer:    ReturnType<typeof setInterval> | undefined;
-  private barTimer:     ReturnType<typeof setInterval> | undefined;
-  private lastState:    PlaybackState | null = null;
-  private barPhase      = 0;
+  private pollTimer: ReturnType<typeof setInterval> | undefined;
+  private barTimer: ReturnType<typeof setInterval> | undefined;
+  private lastState: PlaybackState | null = null;
+  private barPhase = 0;
 
   constructor(
-    api:        SpotifyApi,
+    api: SpotifyApi,
     visualizer: VisualizerPanel,
-    statusBar:  StatusBarController,
+    statusBar: StatusBarController,
   ) {
-    this.api        = api;
+    this.api = api;
     this.visualizer = visualizer;
-    this.statusBar  = statusBar;
+    this.statusBar = statusBar;
 
     // Handle commands sent from the webview
     this.visualizer.onCommand((cmd, data) => this.handleWebviewCommand(cmd, data));
@@ -34,12 +34,12 @@ export class PlayerController {
   start(): void {
     this.poll();  // immediate first fetch
     this.pollTimer = setInterval(() => this.poll(), POLL_INTERVAL_MS);
-    this.barTimer  = setInterval(() => this.tickBars(), BAR_ANIMATE_MS);
+    this.barTimer = setInterval(() => this.tickBars(), BAR_ANIMATE_MS);
   }
 
   stop(): void {
     if (this.pollTimer) clearInterval(this.pollTimer);
-    if (this.barTimer)  clearInterval(this.barTimer);
+    if (this.barTimer) clearInterval(this.barTimer);
   }
 
   // ── Polling ────────────────────────────────────────────────────────────────
@@ -49,15 +49,15 @@ export class PlayerController {
     this.lastState = state;
 
     this.visualizer.update({
-      isPlaying:  state?.isPlaying  ?? false,
-      track:      state?.track      ?? null,
+      isPlaying: state?.isPlaying ?? false,
+      track: state?.track ?? null,
       progressMs: state?.progressMs ?? 0,
-      volume:     state?.volume     ?? 100,
+      volume: state?.volume ?? 100,
     });
 
     this.statusBar.showConnected({
       isPlaying: state?.isPlaying ?? false,
-      track:     state?.track     ?? null,
+      track: state?.track ?? null,
     });
   }
 
@@ -80,9 +80,9 @@ export class PlayerController {
       const norm = i / barCount;
       // Simulate a bell-shaped frequency response with organic movement
       const base =
-        80 * Math.exp(-5  * Math.pow(norm - 0.15, 2)) +
-        60 * Math.exp(-6  * Math.pow(norm - 0.45, 2)) +
-        40 * Math.exp(-8  * Math.pow(norm - 0.75, 2));
+        80 * Math.exp(-5 * Math.pow(norm - 0.15, 2)) +
+        60 * Math.exp(-6 * Math.pow(norm - 0.45, 2)) +
+        40 * Math.exp(-8 * Math.pow(norm - 0.75, 2));
 
       const wave =
         Math.sin(p * 1.3 + i * 0.5) * 20 +
@@ -97,15 +97,15 @@ export class PlayerController {
 
   // ── Playback commands ──────────────────────────────────────────────────────
 
-  async play():                 Promise<void> { await this.api.play();         await this.poll(); }
-  async pause():                Promise<void> { await this.api.pause();        await this.poll(); }
-  async togglePlay():           Promise<void> {
+  async play(): Promise<void> { await this.api.play(); await this.poll(); }
+  async pause(): Promise<void> { await this.api.pause(); await this.poll(); }
+  async togglePlay(): Promise<void> {
     if (this.lastState?.isPlaying) { await this.pause(); } else { await this.play(); }
   }
-  async next():                 Promise<void> { await this.api.next();         await this.poll(); }
-  async prev():                 Promise<void> { await this.api.prev();         await this.poll(); }
+  async next(): Promise<void> { await this.api.next(); await this.poll(); }
+  async prev(): Promise<void> { await this.api.prev(); await this.poll(); }
   async setVolume(pct: number): Promise<void> { await this.api.setVolume(pct); }
-  async seek(pct: number):      Promise<void> {
+  async seek(pct: number): Promise<void> {
     if (!this.lastState?.track) return;
     const ms = pct * this.lastState.track.durationMs;
     await this.api.seek(ms);
@@ -116,10 +116,10 @@ export class PlayerController {
 
   private async handleWebviewCommand(cmd: string, data?: any): Promise<void> {
     switch (cmd) {
-      case 'play':    await this.play();     break;
-      case 'pause':   await this.pause();    break;
-      case 'next':    await this.next();     break;
-      case 'prev':    await this.prev();     break;
+      case 'play': await this.play(); break;
+      case 'pause': await this.pause(); break;
+      case 'next': await this.next(); break;
+      case 'prev': await this.prev(); break;
       case 'shuffle':
         await this.api.setShuffle(!(this.lastState?.shuffleOn));
         break;

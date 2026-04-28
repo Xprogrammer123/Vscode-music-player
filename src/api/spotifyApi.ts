@@ -24,8 +24,6 @@ export interface PlaybackState {
 export class SpotifyApi {
   constructor(private auth: SpotifyAuth) {}
 
-  // ── Playback ──────────────────────────────────────────────────────────────
-
   async getPlaybackState(): Promise<PlaybackState | null> {
     const data = await this.get('/me/player');
     if (!data || !data.item) return null;
@@ -69,8 +67,6 @@ export class SpotifyApi {
     await this.put(`/me/player/seek?position_ms=${Math.round(positionMs)}`);
   }
 
-  // ── Search ────────────────────────────────────────────────────────────────
-
   async search(query: string, limit = 20): Promise<Track[]> {
     const params = new URLSearchParams({ q: query, type: 'track', limit: String(limit) });
     const data   = await this.get(`/search?${params}`);
@@ -78,13 +74,9 @@ export class SpotifyApi {
     return data.tracks.items.map((item: any) => this.mapTrack(item));
   }
 
-  // ── Queue ─────────────────────────────────────────────────────────────────
-
   async addToQueue(uri: string): Promise<void> {
     await this.post(`/me/player/queue?uri=${encodeURIComponent(uri)}`);
   }
-
-  // ── User Library ──────────────────────────────────────────────────────────
 
   async getLikedSongs(limit = 20): Promise<Track[]> {
     const data = await this.get(`/me/tracks?limit=${limit}`);
@@ -97,8 +89,6 @@ export class SpotifyApi {
     if (!data?.items) return [];
     return data.items.map((item: any) => this.mapTrack(item.track));
   }
-
-  // ── Helpers ───────────────────────────────────────────────────────────────
 
   private mapTrack(item: any): Track {
     return {

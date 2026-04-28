@@ -45,21 +45,16 @@ let player;
 let visualizer;
 let statusBar;
 async function activate(context) {
-    // ── Core services ──────────────────────────────────────────────────────────
     const auth = new spotifyAuth_1.SpotifyAuth(context);
     const api = new spotifyApi_1.SpotifyApi(auth);
     visualizer = new visualizerPanel_1.VisualizerPanel(context);
     statusBar = new statusBarController_1.StatusBarController();
     context.subscriptions.push(vscode.window.registerWebviewViewProvider(visualizerPanel_1.VisualizerPanel.viewType, visualizer, { webviewOptions: { retainContextWhenHidden: true } }));
-    // ── Always open the visualizer panel on activation ─────────────────────────
-    // This ensures it comes back every time VS Code starts with the extension active.
     visualizer.show();
     statusBar.showDisconnected();
-    // ── Auto-reconnect if already logged in ────────────────────────────────────
     if (await auth.isLoggedIn()) {
         startPlayer(api, visualizer, statusBar, context);
     }
-    // ── Register commands ──────────────────────────────────────────────────────
     context.subscriptions.push(vscode.commands.registerCommand('musicPlayer.connect', async () => {
         const ok = await auth.login();
         if (ok) {
@@ -90,18 +85,18 @@ async function activate(context) {
             visualizer?.postMessage({ type: 'openSearch' });
         }, 300);
     }));
-    // Push disposables
-    context.subscriptions.push({ dispose: () => { player?.stop(); statusBar?.dispose(); } });
+    context.subscriptions.push({
+        dispose: () => { player?.stop(); statusBar?.dispose(); },
+    });
 }
 function deactivate() {
     player?.stop();
 }
-// ── Helper ───────────────────────────────────────────────────────────────────
 function startPlayer(api, visualizer, statusBar, context) {
-    player?.stop(); // stop any existing poller first
+    player?.stop();
     player = new playerController_1.PlayerController(api, visualizer, statusBar);
     player.start();
-    // Tell the webview it's connected
+    void context;
     visualizer.postMessage({ type: 'connected' });
 }
 //# sourceMappingURL=extension.js.map

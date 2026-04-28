@@ -6,7 +6,6 @@ class SpotifyApi {
     constructor(auth) {
         this.auth = auth;
     }
-    // ── Playback ──────────────────────────────────────────────────────────────
     async getPlaybackState() {
         const data = await this.get('/me/player');
         if (!data || !data.item)
@@ -42,7 +41,6 @@ class SpotifyApi {
     async seek(positionMs) {
         await this.put(`/me/player/seek?position_ms=${Math.round(positionMs)}`);
     }
-    // ── Search ────────────────────────────────────────────────────────────────
     async search(query, limit = 20) {
         const params = new URLSearchParams({ q: query, type: 'track', limit: String(limit) });
         const data = await this.get(`/search?${params}`);
@@ -50,11 +48,9 @@ class SpotifyApi {
             return [];
         return data.tracks.items.map((item) => this.mapTrack(item));
     }
-    // ── Queue ─────────────────────────────────────────────────────────────────
     async addToQueue(uri) {
         await this.post(`/me/player/queue?uri=${encodeURIComponent(uri)}`);
     }
-    // ── User Library ──────────────────────────────────────────────────────────
     async getLikedSongs(limit = 20) {
         const data = await this.get(`/me/tracks?limit=${limit}`);
         if (!data?.items)
@@ -67,7 +63,6 @@ class SpotifyApi {
             return [];
         return data.items.map((item) => this.mapTrack(item.track));
     }
-    // ── Helpers ───────────────────────────────────────────────────────────────
     mapTrack(item) {
         return {
             id: item.id,

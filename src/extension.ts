@@ -5,12 +5,11 @@ import { VisualizerPanel }      from './webview/visualizerPanel';
 import { StatusBarController }  from './player/statusBarController';
 import { PlayerController }     from './player/playerController';
 
-let player:    PlayerController    | undefined;
-let visualizer: VisualizerPanel    | undefined;
-let statusBar:  StatusBarController | undefined;
+let player:    PlayerController      | undefined;
+let visualizer: VisualizerPanel      | undefined;
+let statusBar:  StatusBarController  | undefined;
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
-  // ── Core services ──────────────────────────────────────────────────────────
   const auth       = new SpotifyAuth(context);
   const api        = new SpotifyApi(auth);
   visualizer       = new VisualizerPanel(context);
@@ -24,17 +23,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     ),
   );
 
-  // ── Always open the visualizer panel on activation ─────────────────────────
-  // This ensures it comes back every time VS Code starts with the extension active.
   visualizer.show();
   statusBar.showDisconnected();
 
-  // ── Auto-reconnect if already logged in ────────────────────────────────────
   if (await auth.isLoggedIn()) {
     startPlayer(api, visualizer!, statusBar!, context);
   }
 
-  // ── Register commands ──────────────────────────────────────────────────────
   context.subscriptions.push(
 
     vscode.commands.registerCommand('musicPlayer.connect', async () => {
@@ -80,26 +75,25 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }),
   );
 
-  // Push disposables
-  context.subscriptions.push({ dispose: () => { player?.stop(); statusBar?.dispose(); } });
+  context.subscriptions.push({
+    dispose: () => { player?.stop(); statusBar?.dispose(); },
+  });
 }
 
 export function deactivate(): void {
   player?.stop();
 }
 
-// ── Helper ───────────────────────────────────────────────────────────────────
-
 function startPlayer(
   api:        SpotifyApi,
   visualizer: VisualizerPanel,
   statusBar:  StatusBarController,
-  context:    vscode.ExtensionContext,
+  context: vscode.ExtensionContext,
 ): void {
-  player?.stop();   // stop any existing poller first
+  player?.stop();
   player = new PlayerController(api, visualizer, statusBar);
   player.start();
 
-  // Tell the webview it's connected
+  void context;
   visualizer.postMessage({ type: 'connected' });
 }

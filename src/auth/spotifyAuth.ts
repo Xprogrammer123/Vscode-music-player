@@ -13,9 +13,9 @@ const SCOPES = [
 ].join(' ');
 
 const REDIRECT_PORT = 8765;
-const REDIRECT_URI  = `http://localhost:${REDIRECT_PORT}/callback`;
-const AUTH_URL      = 'https://accounts.spotify.com/authorize';
-const TOKEN_URL     = 'https://accounts.spotify.com/api/token';
+const REDIRECT_URI = `http://localhost:${REDIRECT_PORT}/callback`;
+const AUTH_URL: string = 'https://accounts.spotify.com/authorize';
+const TOKEN_URL: string = 'https://accounts.spotify.com/api/token';
 
 export class SpotifyAuth {
   private context: vscode.ExtensionContext;
@@ -23,8 +23,6 @@ export class SpotifyAuth {
   constructor(context: vscode.ExtensionContext) {
     this.context = context;
   }
-
-  // ── PKCE helpers ──────────────────────────────────────────────────────────
 
   private generateVerifier(length = 64): string {
     return crypto.randomBytes(length).toString('base64url').slice(0, length);
@@ -34,8 +32,6 @@ export class SpotifyAuth {
     const hash = crypto.createHash('sha256').update(verifier).digest();
     return Buffer.from(hash).toString('base64url');
   }
-
-  // ── Public API ────────────────────────────────────────────────────────────
 
   async login(): Promise<boolean> {
     const clientId = vscode.workspace.getConfiguration('musicPlayer').get<string>('clientId', '');
@@ -48,24 +44,22 @@ export class SpotifyAuth {
       await vscode.workspace.getConfiguration('musicPlayer').update('clientId', entered, true);
     }
 
-    const id       = vscode.workspace.getConfiguration('musicPlayer').get<string>('clientId', '');
+    const id = vscode.workspace.getConfiguration('musicPlayer').get<string>('clientId', '');
     const verifier = this.generateVerifier();
     const challenge = await this.generateChallenge(verifier);
 
     await this.context.secrets.store('spotify_verifier', verifier);
 
     const params = new URLSearchParams({
-      client_id:             id,
-      response_type:         'code',
-      redirect_uri:          REDIRECT_URI,
+      client_id: id,
+      response_type: 'code',
+      redirect_uri: REDIRECT_URI,
       code_challenge_method: 'S256',
-      code_challenge:        challenge,
-      scope:                 SCOPES,
+      code_challenge: challenge,
+      scope: SCOPES,
     });
 
     const authUri = `${AUTH_URL}?${params.toString()}`;
-
-    // Open browser and wait for callback on local server
     const code = await this.waitForCallback(authUri);
     if (!code) return false;
 
@@ -80,13 +74,12 @@ export class SpotifyAuth {
   }
 
   async getAccessToken(): Promise<string | null> {
-    const token   = await this.context.secrets.get('spotify_access_token');
-    const expiry  = this.context.globalState.get<number>('spotify_token_expiry', 0);
+    const token = await this.context.secrets.get('spotify_access_token');
+    const expiry = this.context.globalState.get<number>('spotify_token_expiry', 0);
     const refresh = await this.context.secrets.get('spotify_refresh_token');
 
     if (!token) return null;
 
-    // Refresh if within 60s of expiry
     if (Date.now() > expiry - 60_000 && refresh) {
       return this.refreshToken(refresh);
     }
@@ -98,8 +91,6 @@ export class SpotifyAuth {
     const token = await this.context.secrets.get('spotify_access_token');
     return Boolean(token);
   }
-
-  // ── Private helpers ───────────────────────────────────────────────────────
 
   private waitForCallback(authUri: string): Promise<string | null> {
     return new Promise(resolve => {
@@ -127,7 +118,6 @@ export class SpotifyAuth {
         vscode.env.openExternal(vscode.Uri.parse(authUri));
       });
 
-      // Timeout after 2 minutes
       setTimeout(() => { server.close(); resolve(null); }, 120_000);
     });
   }
@@ -135,21 +125,22 @@ export class SpotifyAuth {
   private async exchangeCode(clientId: string, code: string, verifier: string): Promise<boolean> {
     try {
       const body = new URLSearchParams({
-        client_id:     clientId,
-        grant_type:    'authorization_code',
+        client_id: clientId,
+        grant_type: 'authorization_code',
         code,
-        redirect_uri:  REDIRECT_URI,
+        redirect_uri: REDIRECT_URI,
         code_verifier: verifier,
       });
 
-      const res  = await fetch(TOKEN_URL, {
-        method:  'POST',
+      const res = await fetch(TOKEN_URL, {
+        method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body:    body.toString(),
+        body: body.toString(),
       });
-      const data = await res.json() as any;
 
+      const data = await res.json() as any;
       if (!data.access_token) return false;
+
       await this.storeTokens(data);
       return true;
     } catch {
@@ -161,19 +152,20 @@ export class SpotifyAuth {
     try {
       const clientId = vscode.workspace.getConfiguration('musicPlayer').get<string>('clientId', '');
       const body = new URLSearchParams({
-        grant_type:    'refresh_token',
+        grant_type: 'refresh_token',
         refresh_token: refreshToken,
-        client_id:     clientId,
+        client_id: clientId,
       });
 
-      const res  = await fetch(TOKEN_URL, {
-        method:  'POST',
+      const res = await fetch(TOKEN_URL, {
+        method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body:    body.toString(),
+        body: body.toString(),
       });
-      const data = await res.json() as any;
 
+      const data = await res.json() as any;
       if (!data.access_token) return null;
+
       await this.storeTokens(data);
       return data.access_token;
     } catch {
@@ -186,6 +178,7 @@ export class SpotifyAuth {
     if (data.refresh_token) {
       await this.context.secrets.store('spotify_refresh_token', data.refresh_token);
     }
+
     const expiry = Date.now() + (data.expires_in || 3600) * 1000;
     await this.context.globalState.update('spotify_token_expiry', expiry);
   }

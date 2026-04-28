@@ -54,7 +54,6 @@ class SpotifyAuth {
     constructor(context) {
         this.context = context;
     }
-    // ── PKCE helpers ──────────────────────────────────────────────────────────
     generateVerifier(length = 64) {
         return crypto.randomBytes(length).toString('base64url').slice(0, length);
     }
@@ -62,7 +61,6 @@ class SpotifyAuth {
         const hash = crypto.createHash('sha256').update(verifier).digest();
         return Buffer.from(hash).toString('base64url');
     }
-    // ── Public API ────────────────────────────────────────────────────────────
     async login() {
         const clientId = vscode.workspace.getConfiguration('musicPlayer').get('clientId', '');
         if (!clientId) {
@@ -87,7 +85,6 @@ class SpotifyAuth {
             scope: SCOPES,
         });
         const authUri = `${AUTH_URL}?${params.toString()}`;
-        // Open browser and wait for callback on local server
         const code = await this.waitForCallback(authUri);
         if (!code)
             return false;
@@ -105,7 +102,6 @@ class SpotifyAuth {
         const refresh = await this.context.secrets.get('spotify_refresh_token');
         if (!token)
             return null;
-        // Refresh if within 60s of expiry
         if (Date.now() > expiry - 60000 && refresh) {
             return this.refreshToken(refresh);
         }
@@ -115,7 +111,6 @@ class SpotifyAuth {
         const token = await this.context.secrets.get('spotify_access_token');
         return Boolean(token);
     }
-    // ── Private helpers ───────────────────────────────────────────────────────
     waitForCallback(authUri) {
         return new Promise(resolve => {
             const server = http.createServer((req, res) => {
@@ -138,7 +133,6 @@ class SpotifyAuth {
             server.listen(REDIRECT_PORT, () => {
                 vscode.env.openExternal(vscode.Uri.parse(authUri));
             });
-            // Timeout after 2 minutes
             setTimeout(() => { server.close(); resolve(null); }, 120000);
         });
     }

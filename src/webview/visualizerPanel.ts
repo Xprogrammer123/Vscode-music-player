@@ -53,10 +53,10 @@ export class VisualizerPanel implements vscode.WebviewViewProvider {
 
   /** Called every ~1 s by the poller with fresh playback state */
   update(payload: {
-    isPlaying:  boolean;
-    track:      Track | null;
+    isPlaying: boolean;
+    track: Track | null;
     progressMs: number;
-    volume:     number;
+    volume: number;
   }): void {
     void this.postMessage({ type: 'state', ...payload });
   }
